@@ -1483,3 +1483,18 @@ Static QA of repository content (2026-07-19):
 - `Adorama/Reporting Analysis/` directory is empty (placeholder).
 - No `tools/*.py` automation package is present despite older setup notes referring to it.
 - Notes - Instructions unlock password is operational (accidental-edit protection, not encryption): `Adorama@042026_` (active/template); legacy backup may still use `adorama2024`.
+
+
+# Module / File: Others/Personal Finance Tracker.xlsx
+
+## Function: Interest Rate Savings Projection
+- **Purpose**: Calculates projected net savings including user-specified annual interest rate over a dynamic period.
+- **Inputs**:
+  - `Income` (`currency`): Total income over the selected period.
+  - `Expense` (`currency`): Total expense over the selected period.
+  - `Annual Interest Rate` (`percentage`): User input cell at Dashboard `L4`.
+  - `Months` (`integer`): Number of months in the selected period (calculated at Dashboard `N6`).
+- **Outputs**: Projected Net Savings including simple interest (Dashboard `H7`).
+- **Dependencies**: `Settings` configuration sheet, `Transactions` sheet data.
+- **Behavior**: Computes base net savings (`Income - Expense`) and multiplies it by `(1 + (Annual Rate / 12) * Months)`.
+- **Side Effects**: None.
