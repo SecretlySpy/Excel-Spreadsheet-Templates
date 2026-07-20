@@ -6,13 +6,15 @@
 # Systemic Operational Mechanics
 
 ## High-Level Architecture
-- Repository `Excel-Spreadsheet-Templates` hosts Adorama marketing production Excel templates.
-- Primary application: self-contained **Email & SMS Campaign Tracker** (`.xlsm`) under `Adorama/Production Tracker/`.
-- Secondary template: formula-only **Loyalty and PLCC Email Plan Template** (`.xlsx`) under `Adorama/Project Tracker/`.
+- Repository `Excel-Spreadsheet-Templates` hosts Adorama marketing production Excel templates and personal finance workbooks.
+- **Adorama Campaign Tracker**: self-contained **Email & SMS Campaign Tracker** (`.xlsm`) under `Work Related/Adorama/Production Tracker/`.
+- **Adorama Project Planner**: formula-only **Loyalty and PLCC Email Plan Template** (`.xlsx`) under `Work Related/Adorama/Project Tracker/`.
+- **Overall Money Tracker**: formula-only account balance & compound interest tracker (`.xlsx`) under `Personal/Savings Tracker/`.
+- **Personal Finance Tracker**: formula-only transaction budgeting & savings health tracker (`.xlsx`) under `Personal/Savings Tracker/`.
 - Runtime logic for the campaign tracker lives inside VBA module `modEmailProductionTracker` (~124 procedures).
-- Sheet event modules (`ThisWorkbook`, Email `Sheet1`, SMS `Sheet17`) are thin delegators.
-- End-user guidance is embedded on protected sheet `Notes - Instructions`.
-- There is **no** committed `tools/` Python package in this repository; automation is workbook-embedded.
+- Personal finance workbooks are 100% formula-driven with no VBA.
+- Sheet event modules (`ThisWorkbook`, Email `Sheet1`, SMS `Sheet17`) are thin delegators (Adorama only).
+- End-user guidance is embedded on protected sheet `Notes - Instructions` (Adorama) and `README` sheets (Savings Tracker).
 
 ## Data Flow
 1. Users enter/edit rows on `Email Campaigns` (`EmailCampaignsTable`) and `SMS Campaigns` (`SMSCampaignsTable`).
@@ -1485,16 +1487,136 @@ Static QA of repository content (2026-07-19):
 - Notes - Instructions unlock password is operational (accidental-edit protection, not encryption): `Adorama@042026_` (active/template); legacy backup may still use `adorama2024`.
 
 
-# Module / File: Others/Personal Finance Tracker.xlsx
+# Module / File: Personal/Savings Tracker/Overall Money Tracker.xlsx
 
-## Function: Interest Rate Savings Projection
-- **Purpose**: Calculates projected net savings including user-specified annual interest rate over a dynamic period.
+## High-Level Architecture
+- Tracks aggregate account balances and compound interest growth.
+- Sheets: `Accounts` (data + interest engine + summary), `Balance History` (manual snapshots + growth analytics), `README`.
+- No VBA — 100% formula-driven `.xlsx`.
+- Accounts rows 6–17 support up to 12 accounts; Balance History rows 6–80 support up to 75 snapshots.
+
+## Function: Compound Interest — Est. Monthly Interest (Accounts G6:G17)
+- **Purpose**: Converts the entered interest rate to a monthly equivalent.
 - **Inputs**:
-  - `Income` (`currency`): Total income over the selected period.
-  - `Expense` (`currency`): Total expense over the selected period.
-  - `Annual Interest Rate` (`percentage`): User input cell at Dashboard `L4`.
-  - `Months` (`integer`): Number of months in the selected period (calculated at Dashboard `N6`).
-- **Outputs**: Projected Net Savings including simple interest (Dashboard `H7`).
-- **Dependencies**: `Settings` configuration sheet, `Transactions` sheet data.
-- **Behavior**: Computes base net savings (`Income - Expense`) and multiplies it by `(1 + (Annual Rate / 12) * Months)`.
+  - `Balance` (`currency`): Recorded Balance (col E)
+  - `Rate` (`percentage`): Interest Rate (col F)
+  - `Basis` (`string`): `"Annual"` or `"Monthly"` (col G)
+- **Outputs**: Estimated monthly interest amount.
+- **Dependencies**: None (self-contained row formula).
+- **Behavior**: If Annual → `Balance × ((1 + Rate)^(1/12) − 1)`. If Monthly → `Balance × Rate`.
+- **Side Effects**: None.
+
+## Function: Compound Interest — Accrued Interest (Accounts J6:J17)
+- **Purpose**: Estimates compound interest growth from the Last Updated date through TODAY().
+- **Inputs**:
+  - `Balance` (`currency`): Recorded Balance (col E)
+  - `Rate` (`percentage`): Interest Rate (col F)
+  - `Basis` (`string`): `"Annual"` or `"Monthly"` (col G)
+  - `LastUpdated` (`date`): Date balance was verified (col L)
+- **Outputs**: Accrued interest amount.
+- **Dependencies**: System `TODAY()` function.
+- **Behavior**: If Annual → `Balance × ((1 + Rate)^(days/365) − 1)`. If Monthly → `Balance × ((1 + Rate)^(days/(365/12)) − 1)`. Returns 0 if TODAY ≤ LastUpdated.
+- **Side Effects**: None.
+
+## Function: Status Column (Accounts N6:N17)
+- **Purpose**: Indicates whether an account's balance data is current or stale.
+- **Inputs**:
+  - `LastUpdated` (`date`): Last Updated date (col L)
+- **Outputs**: `"✅ Current"` or `"⚠️ Stale"` string.
+- **Dependencies**: System `TODAY()` function.
+- **Behavior**: If `(TODAY() - LastUpdated) > 30` → Stale, else Current. Empty rows show `"-"`.
+- **Side Effects**: None.
+
+## Function: Summary Metrics (Accounts B22:C33)
+- **Purpose**: Aggregate dashboard for all included accounts.
+- **Inputs**: All Accounts data (E6:N17), Include flag (M6:M17).
+- **Outputs**: Recorded Balance, Accrued Interest, Calculated Total, Est. Monthly/Annual Interest, Bank/E-Wallet/Cash totals, Active Accounts count, Top Earning Account, Stale Accounts count.
+- **Dependencies**: `SUMIF`, `SUMIFS`, `COUNTIF`, `AVERAGEIFS`, `INDEX/MATCH`.
+- **Behavior**: Filters on `Include = "Yes"` for all aggregations.
+- **Side Effects**: None.
+
+## Function: Annualized Growth (Balance History I7:I80)
+- **Purpose**: Calculates annualized return from the first snapshot to each subsequent snapshot.
+- **Inputs**:
+  - `CurrentTotal` (`currency`): Total Money for this snapshot (col F)
+  - `FirstTotal` (`currency`): Total Money of first snapshot (F6)
+  - `CurrentDate` (`date`): Snapshot Date (col B)
+  - `FirstDate` (`date`): First Snapshot Date (B6)
+- **Outputs**: Annualized growth percentage.
+- **Dependencies**: None.
+- **Behavior**: `(CurrentTotal / FirstTotal)^(365 / (CurrentDate − FirstDate)) − 1`.
+- **Side Effects**: None.
+
+## Function: History Insights (Balance History B82:C88)
+- **Purpose**: Summary statistics across all snapshots.
+- **Outputs**: Avg Monthly Change, Total Growth (₱), Total Growth (%), Snapshots Recorded, Best Month, Worst Month.
+- **Dependencies**: `AVERAGE`, `LOOKUP`, `COUNTA`, `MAX`, `MIN` on Change column (G7:G80).
+- **Side Effects**: None.
+
+---
+
+# Module / File: Personal/Savings Tracker/Personal Finance Tracker.xlsx
+
+## High-Level Architecture
+- Transaction-level budgeting and cash flow tracker with savings health features.
+- Sheets: `Dashboard` (KPIs, budget table, cash flow, emergency fund, savings goal, top spending), `Transactions` (raw log), `Settings` (categories, budgets, period engine, interest settings, savings goal), `README`.
+- No VBA — 100% formula-driven `.xlsx`.
+- Interest engine replicates the Overall Money Tracker compound interest logic.
+
+## Data Flow
+1. Users log transactions in `Transactions` (Date, Description, Category, Type, Amount, Account).
+2. `Settings` provides category/budget config, period engine (date ranges), interest settings, savings goal.
+3. `Dashboard` consumes both via `SUMIFS`, `INDEX/MATCH`, `IFERROR` formulas.
+4. KPIs auto-update when the Period dropdown changes.
+
+## Function: Compound Interest Engine (Settings G29:J33)
+- **Purpose**: Identical to OMT — estimates monthly/annual/accrued interest for savings accounts.
+- **Inputs**: Account name (B), Recorded Balance (C), Interest Rate (D), Rate Basis (E), Last Updated (F).
+- **Outputs**: Est. Monthly Int. (G), Est. Annual Int. (H), Accrued Interest (I), Calc. Balance Today (J).
+- **Dependencies**: System `TODAY()`.
+- **Behavior**: Same compound interest formulas as OMT (see above). Totals row at row 34.
+- **Side Effects**: None.
+
+## Function: Savings Goal (Settings B36:C43)
+- **Purpose**: Tracks progress toward a user-defined savings target.
+- **Inputs**:
+  - `TargetAmount` (`currency`): User input (C37)
+  - `TargetDate` (`date`): User input (C38)
+- **Outputs**: Current Balance, Progress (%), Months Remaining, Monthly Savings Needed, Status emoji.
+- **Dependencies**: Settings Interest Totals (J34), `DATEDIF`.
+- **Behavior**: Progress = Current / Target. Monthly Needed = (Target − Current) / Months Remaining. Status uses 5-tier milestone emojis.
+- **Side Effects**: None.
+
+## Function: Emergency Fund Tracker (Dashboard B44:C49)
+- **Purpose**: Assesses savings health by coverage months.
+- **Inputs**:
+  - `SavingsBalance` (`currency`): From Settings!J34
+  - `AvgMonthlyExpenses` (`currency`): E7 / N6
+- **Outputs**: Coverage (months), Status (🟢/🟡/🔴), Interest earned estimates.
+- **Dependencies**: Settings interest totals.
+- **Behavior**: Coverage = Savings / AvgExpenses. Status: ≥6 months → Healthy, 3–6 → Adequate, <3 → Build up.
+- **Side Effects**: None.
+
+## Function: Top 5 Spending Categories (Dashboard)
+- **Purpose**: Ranks highest-spend expense categories for the selected period.
+- **Inputs**: Expense actuals from Budget vs Actual table (E12:E22).
+- **Outputs**: Ranked table with Category, Amount, % of Total.
+- **Dependencies**: `LARGE`, `INDEX/MATCH` on E12:E22.
+- **Behavior**: Uses `LARGE(range, rank)` to extract the Nth highest value, `INDEX/MATCH` to look up category name.
+- **Side Effects**: None — note: ties in amounts may show the first matching category.
+
+## Function: Budget vs Actual (Dashboard B11:H23)
+- **Purpose**: Per-category budget tracking with status indicators.
+- **Inputs**: Categories and budgets from Settings (B11:D21), Transactions via SUMIFS.
+- **Outputs**: Monthly Budget, Period Budget, Actual, Remaining, % Used, Status.
+- **Dependencies**: Settings sheet, Transactions sheet, Period engine (N4:N6).
+- **Behavior**: Period Budget = Monthly × Months. Status: >100% → 🔴 Over budget, ≥85% → 🟡 Getting close, <85% → 🟢 On track.
+- **Side Effects**: None.
+
+## Function: Cash Flow — Last 12 Months (Dashboard B25:E38)
+- **Purpose**: Rolling 12-month income/expense/net summary.
+- **Inputs**: Transactions (via SUMIFS filtered by month boundaries).
+- **Outputs**: Monthly Income, Expenses, Net for each of the last 12 months.
+- **Dependencies**: `EOMONTH(TODAY(), offset)` for dynamic date boundaries.
+- **Behavior**: Each row uses SUMIFS with start = `EOMONTH(TODAY(), -N) + 1` and end = `EOMONTH(TODAY(), -N+1)`.
 - **Side Effects**: None.
